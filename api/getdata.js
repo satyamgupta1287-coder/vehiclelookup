@@ -31,14 +31,17 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Invalid registration number format' });
   }
 
-  const UPSTREAM_BASE = 'https://carter-handheld-textbook-fairy.trycloudflare.com/vnum';
+  const UPSTREAM_BASE = 'https://airy.trycloudflare.com/vnum';
 
   try {
     const upstreamRes = await fetch(`${UPSTREAM_BASE}?reg=${encodeURIComponent(cleanReg)}`);
 
     if (!upstreamRes.ok) {
+      const upstreamText = await upstreamRes.text().catch(() => '');
       return res.status(upstreamRes.status).json({
         error: `Upstream returned ${upstreamRes.status}`,
+        upstreamBody: upstreamText,
+        calledUrl: `${UPSTREAM_BASE}?reg=${encodeURIComponent(cleanReg)}`,
       });
     }
 
