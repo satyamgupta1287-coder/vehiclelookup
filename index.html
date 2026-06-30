@@ -258,7 +258,7 @@
           <label>Registration Number</label>
           <div class="input-wrapper">
             <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-            <input type="text" id="regInput" placeholder="JH 11 AB 1187" maxlength="15" autocomplete="off" spellcheck="false">
+            <input type="text" id="regInput" placeholder="MH01AB1234" maxlength="15" autocomplete="off" spellcheck="false">
           </div>
         </div>
 
@@ -354,17 +354,9 @@
     }, 3500);
   }
 
-  // Auto-Formatting Input (Add space visually, e.g. JH 11 AB 1187)
+  // Auto-Formatting Input (Only Uppercase and Alphanumeric - No Spaces)
   input.addEventListener('input', (e) => {
-    let cursor = e.target.selectionStart;
-    let val = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    
-    let formatted = '';
-    for(let i=0; i<val.length; i++) {
-      if(i === 2 || i === 4 || i === 6) formatted += ' ';
-      formatted += val[i];
-    }
-    input.value = formatted;
+    input.value = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
   });
 
   // Hacker Typing Effect
@@ -383,7 +375,7 @@
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
-    // Clean spaces for API call
+    // Clean spaces for API call just in case
     const reg = input.value.replace(/\s/g, '');
     const authKey = keyInput.value.trim();
     
