@@ -414,7 +414,7 @@
       if(!res.ok) throw new Error("Server returned " + res.status);
       const data = await res.json();
 
-      const mobile = data.mobile || data.number || data.phone || data.result || JSON.stringify(data);
+      const mobile = data.mobile_no || data.mobile || data.number || data.phone || data.result || JSON.stringify(data);
 
       queriedReg.textContent = reg;
       numOut.textContent = mobile;
