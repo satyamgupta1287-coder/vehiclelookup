@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VAHAN_TRACE :: vehicle registry lookup</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Share+Tech+Mono&display=swap');
+
+  :root{
+    --bg: #06090a;
+    --bg2: #0b1212;
+    --green: #39ff8c;
+    --green-dim: #1b6b46;
+    --amber: #ffb000;
+    --red: #ff3b3b;
+    --line: #143028;
+    --text: #c9f7dd;
+    --text-dim: #5d8a76;
+  }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+
+  html,body{
+    height:100%;
+    background: var(--bg);
+    font-family:'JetBrains Mono', monospace;
+    color: var(--text);
+    overflow-x:hidden;
+  }
+
+  body{
+    background-image:
+      radial-gradient(circle at 20% 10%, rgba(57,255,140,0.05), transparent 40%),
+      radial-gradient(circle at 80% 90%, rgba(255,176,0,0.04), transparent 40%);
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding: 24px;
+    position:relative;
+  }
+
+  /* scanline overlay */
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(0,0,0,0) 0px,
+      rgba(0,0,0,0) 2px,
+      rgba(0,255,128,0.018) 3px,
+      rgba(0,0,0,0) 4px
+    );
+    pointer-events:none;
+    z-index: 50;
+  }
+  body::after{
+    content:"";
+    position:fixed; inset:0;
+    background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.55) 100%);
+    pointer-events:none;
+    z-index: 49;
+  }
+
+  .frame{
+    width:100%;
+    max-width: 620px;
+    border: 1px solid var(--line);
+    background: linear-gradient(180deg, var(--bg2), #070b0a);
+    box-shadow: 0 0 0 1px rgba(57,255,140,0.06), 0 30px 80px -20px rgba(0,0,0,0.8);
+    position:relative;
+  }
+
+  .frame::before{
+    content:"";
+    position:absolute; top:-1px; left:-1px; right:-1px; bottom:-1px;
+    border:1px solid transparent;
+    background: linear-gradient(120deg, rgba(57,255,140,0.25), transparent 30%, transparent 70%, rgba(255,176,0,0.15)) border-box;
+    -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events:none;
+  }
+
+  /* topbar */
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--line);
+    font-family:'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--text-dim);
+  }
+  .topbar .dots{ display:flex; gap:6px; }
+  .topbar .dots span{
+    width:7px; height:7px; border-radius:50%;
+    background: var(--green-dim);
+    box-shadow: 0 0 6px rgba(57,255,140,0.4);
+  }
+  .topbar .dots span:nth-child(1){ background:var(--red); box-shadow:0 0 6px rgba(255,59,59,.5); }
+  .topbar .dots span:nth-child(2){ background:var(--amber); box-shadow:0 0 6px rgba(255,176,0,.5); }
+  .topbar .id{ color: var(--green); }
+
+  .body-pad{ padding: 28px 26px 30px; }
+
+  .eyebrow{
+    font-family:'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.25em;
+    color: var(--text-dim);
+    text-transform:uppercase;
+    margin-bottom:10px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .eyebrow::before{
+    content:"";
+    width: 18px; height:1px;
+    background: var(--green-dim);
+  }
+
+  h1{
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    color:#eafff1;
+    text-shadow: 0 0 18px rgba(57,255,140,0.25);
+    margin-bottom: 6px;
+  }
+  h1 .accent{ color: var(--green); }
+
+  .sub{
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height:1.55;
+    max-width: 50ch;
+    margin-bottom: 22px;
+  }
+
+  .demo-banner{
+    display:flex;
+    align-items:flex-start;
+    gap:10px;
+    border:1px dashed rgba(255,176,0,0.35);
+    background: rgba(255,176,0,0.05);
+    color: var(--amber);
+    font-size: 11.5px;
+    padding: 10px 12px;
+    margin-bottom: 24px;
+    line-height:1.5;
+  }
+  .demo-banner b{ font-family:'Share Tech Mono', monospace; letter-spacing:0.05em; }
+
+  form{ display:flex; flex-direction:column; gap:10px; }
+
+  label{
+    font-size: 11px;
+    letter-spacing:0.15em;
+    color: var(--text-dim);
+    text-transform:uppercase;
+  }
+
+  .input-row{
+    display:flex;
+    border: 1px solid var(--line);
+    background: #050807;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .input-row:focus-within{
+    border-color: var(--green-dim);
+    box-shadow: 0 0 0 3px rgba(57,255,140,0.08);
+  }
+  .input-row .prefix{
+    display:flex; align-items:center;
+    padding: 0 12px;
+    color: var(--green);
+    font-size: 13px;
+    border-right: 1px solid var(--line);
+    background: rgba(57,255,140,0.03);
+  }
+  input[type="text"]{
+    flex:1;
+    background:transparent;
+    border:none;
+    outline:none;
+    color: var(--text);
+    font-family:'JetBrains Mono', monospace;
+    font-size: 17px;
+    font-weight:700;
+    letter-spacing: 0.08em;
+    padding: 14px 14px;
+    text-transform: uppercase;
+  }
+  input[type="text"]::placeholder{
+    color:#2c4e3e;
+    font-weight:500;
+    letter-spacing:0.05em;
+  }
+
+  button{
+    margin-top: 6px;
+    background: var(--green);
+    color: #032015;
+    border:none;
+    font-family:'JetBrains Mono', monospace;
+    font-weight:800;
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    text-transform:uppercase;
+    padding: 14px 18px;
+    cursor:pointer;
+    position:relative;
+    overflow:hidden;
+    transition: transform .12s ease, box-shadow .2s ease;
+    box-shadow: 0 0 0 1px rgba(57,255,140,0.4), 0 8px 24px -8px rgba(57,255,140,0.5);
+  }
+  button:hover{ transform: translateY(-1px); box-shadow: 0 0 0 1px rgba(57,255,140,0.6), 0 12px 28px -8px rgba(57,255,140,0.65); }
+  button:active{ transform: translateY(0); }
+  button:disabled{ opacity:0.6; cursor:wait; transform:none; }
+
+  button .btn-label{ position:relative; z-index:2; }
+
+  /* result area */
+  .result{
+    margin-top: 22px;
+    border-top: 1px solid var(--line);
+    padding-top: 20px;
+    display:none;
+  }
+  .result.show{ display:block; animation: fadeUp .35s ease; }
+
+  @keyframes fadeUp{
+    from{ opacity:0; transform: translateY(6px); }
+    to{ opacity:1; transform: translateY(0); }
+  }
+
+  .result-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    font-size: 11px;
+    letter-spacing:0.15em;
+    text-transform:uppercase;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+  }
+  .result-row .ok{
+    color: var(--green);
+    display:flex; align-items:center; gap:6px;
+  }
+  .result-row .ok::before{
+    content:"";
+    width:6px; height:6px; border-radius:50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+  }
+
+  .number-display{
+    border:1px solid var(--green-dim);
+    background: linear-gradient(180deg, rgba(57,255,140,0.06), rgba(57,255,140,0.01));
+    padding: 18px 20px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap: 12px;
+  }
+  .number-display .num{
+    font-size: 24px;
+    font-weight:800;
+    letter-spacing: 0.08em;
+    color:#eafff1;
+    text-shadow: 0 0 16px rgba(57,255,140,0.4);
+    font-family:'Share Tech Mono', monospace;
+  }
+  .copy-btn{
+    background:transparent;
+    border:1px solid var(--green-dim);
+    color: var(--green);
+    font-size:10px;
+    letter-spacing:0.1em;
+    padding: 8px 10px;
+    text-transform:uppercase;
+    box-shadow:none;
+    margin:0;
+  }
+  .copy-btn:hover{ background: rgba(57,255,140,0.08); box-shadow:none; }
+
+  .meta-line{
+    margin-top: 12px;
+    font-size: 11px;
+    color: var(--text-dim);
+    display:flex;
+    justify-content:space-between;
+  }
+
+  .error{
+    margin-top:20px;
+    border:1px solid rgba(255,59,59,0.4);
+    background: rgba(255,59,59,0.06);
+    color: var(--red);
+    font-size:12px;
+    padding: 12px 14px;
+    display:none;
+  }
+  .error.show{ display:block; }
+
+  .footer-note{
+    margin-top: 26px;
+    font-size: 10.5px;
+    color: #3a5c4c;
+    text-align:center;
+    letter-spacing: 0.08em;
+  }
+
+  /* loading dots */
+  .loading-dots span{
+    animation: blink 1.2s infinite;
+    opacity:0;
+  }
+  .loading-dots span:nth-child(2){ animation-delay: .2s; }
+  .loading-dots span:nth-child(3){ animation-delay: .4s; }
+  @keyframes blink{ 0%,100%{opacity:0;} 50%{opacity:1;} }
+
+  @media (max-width: 480px){
+    h1{ font-size:22px; }
+    .number-display{ flex-direction:column; align-items:flex-start; }
+    .number-display .num{ font-size:20px; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="frame">
+    <div class="topbar">
+      <div class="dots"><span></span><span></span><span></span></div>
+      <div class="id">VAHAN_TRACE // <span style="color:var(--text-dim)">demo_node_01</span></div>
+    </div>
+
+    <div class="body-pad">
+      <div class="eyebrow">registry interface</div>
+      <h1>Vehicle<span class="accent">.</span>Trace</h1>
+
+      <div class="demo-banner">
+        <span>⚠</span>
+        <span><b>DEMO MODE —</b> ye ek sandbox endpoint hai. Koi bhi valid-format number same static response return karega. Real registry se connected nahi hai.</span>
+      </div>
+
+      <form id="lookupForm">
+        <label for="regInput">Registration Number</label>
+        <div class="input-row">
+          <span class="prefix">⌕</span>
+          <input type="text" id="regInput" placeholder="JH11AB1187" maxlength="12" autocomplete="off" spellcheck="false">
+        </div>
+        <button type="submit" id="submitBtn">
+          <span class="btn-label" id="btnLabel">Run Trace</span>
+        </button>
+      </form>
+
+      <div class="error" id="errorBox"></div>
+
+      <div class="result" id="resultBox">
+        <div class="result-row">
+          <span>query: <span id="queriedReg" style="color:var(--text)">—</span></span>
+          <span class="ok">match found</span>
+        </div>
+        <div class="number-display">
+          <span class="num" id="numOut">—</span>
+          <button type="button" class="copy-btn" id="copyBtn">Copy</button>
+        </div>
+        <div class="meta-line">
+          <span>source: demo_node_01</span>
+          <span id="timestamp">—</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const API_BASE = "/api/getdata?reg=";
+
+  const form = document.getElementById('lookupForm');
+  const input = document.getElementById('regInput');
+  const btn = document.getElementById('submitBtn');
+  const btnLabel = document.getElementById('btnLabel');
+  const resultBox = document.getElementById('resultBox');
+  const errorBox = document.getElementById('errorBox');
+  const numOut = document.getElementById('numOut');
+  const queriedReg = document.getElementById('queriedReg');
+  const timestamp = document.getElementById('timestamp');
+  const copyBtn = document.getElementById('copyBtn');
+
+  input.addEventListener('input', () => {
+    input.value = input.value.toUpperCase();
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const reg = input.value.trim();
+    errorBox.classList.remove('show');
+    resultBox.classList.remove('show');
+
+    if(!reg){
+      errorBox.textContent = "ERROR: registration number required.";
+      errorBox.classList.add('show');
+      return;
+    }
+
+    btn.disabled = true;
+    btnLabel.innerHTML = 'Tracing<span class="loading-dots"><span>.</span><span>.</span><span>.</span></span>';
+
+    try{
+      const res = await fetch(API_BASE + encodeURIComponent(reg));
+      if(!res.ok) throw new Error("Server returned " + res.status);
+      const data = await res.json();
+
+      const mobile = data.mobile || data.number || data.phone || data.result || JSON.stringify(data);
+
+      queriedReg.textContent = reg;
+      numOut.textContent = mobile;
+      timestamp.textContent = new Date().toLocaleTimeString();
+      resultBox.classList.add('show');
+    }catch(err){
+      errorBox.textContent = "ERROR: trace failed — " + err.message;
+      errorBox.classList.add('show');
+    }finally{
+      btn.disabled = false;
+      btnLabel.textContent = 'Run Trace';
+    }
+  });
+
+  copyBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(numOut.textContent).then(() => {
+      copyBtn.textContent = 'Copied';
+      setTimeout(() => copyBtn.textContent = 'Copy', 1200);
+    });
+  });
+</script>
+
+</body>
+</html>
