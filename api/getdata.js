@@ -1,5 +1,5 @@
 // api/getdata.js
-// Updated Backend Code exactly matching your API JSON structure
+// Dual-API Secure Proxy: Fetches Mobile from API 1 and Owner from API 2
 
 export default async function handler(req, res) {
   // CORS Headers
@@ -21,13 +21,14 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing required query param: reg' });
   }
 
-  // 1. Strict Cleaning: Sirf Letters aur Numbers allow karenge
+  // Strict Cleaning
   const cleanReg = reg.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-  // Aapki Main API jisme Owner aur Mobile dono hain
-  const API_URL = `https://vehicleinfo.noobgamingv40.workers.dev/fetch?vehicle=${cleanReg}`;
+  // Dono APIs Set Karna
+  const MOBILE_API_URL = `https://carter-handheld-textbook-fairy.trycloudflare.com/vnum?reg=${cleanReg}`;
+  const OWNER_API_URL = `https://vehicleinfo.noobgamingv40.workers.dev/fetch?vehicle=${cleanReg}`;
 
-  // 2. Anti-Bot Headers: Cloudflare ko bypass karne ke liye
+  // Anti-Bot Headers
   const fetchOptions = {
     method: 'GET',
     headers: {
@@ -37,31 +38,51 @@ export default async function handler(req, res) {
   };
 
   try {
-    const response = await fetch(API_URL, fetchOptions);
+    // Dono APIs ko PARALLEL (ek saath) call karenge taaki speed kam na ho
+    const [mobileRes, ownerRes] = await Promise.allSettled([
+      fetch(MOBILE_API_URL, fetchOptions),
+      fetch(OWNER_API_URL, fetchOptions)
+    ]);
 
-    if (!response.ok) {
-      throw new Error(`API returned ${response.status}`);
-    }
-
-    const text = await response.text();
-    const data = JSON.parse(text);
-
-    let finalOwner = "N/A";
     let finalMobile = "N/A";
+    let finalOwner = "N/A";
 
-    // ✅ SCREENSHOT KE HISAAB SE EXACT PARSING
-    
-    // 1. Owner Name Extract (vehicle_data ke andar hai)
-    if (data && data.vehicle_data && data.vehicle_data.owner) {
-      finalOwner = data.vehicle_data.owner;
+    // ==========================================
+    // 1. MOBILE NUMBER EXTRACTION (Purani API se)
+    // ==========================================
+    if (mobileRes.status === 'fulfilled' && mobileRes.value.ok) {
+      try {
+        const text = await mobileRes.value.text();
+        const data = JSON.parse(text);
+        
+        finalMobile = data.mobile_no || data.mobile || data.number || data.phone || 
+                     (data.result && (data.result.mobile_no || data.result.mobile || data.result.phone)) || 
+                     "N/A";
+      } catch (e) {
+        console.error("Mobile API parsing failed");
+      }
     }
 
-    // 2. Mobile Number Extract (Seedha bahar hai)
-    if (data && data.mobile_number) {
-      finalMobile = data.mobile_number;
+    // ==========================================
+    // 2. OWNER NAME EXTRACTION (Nayi API se - exact screenshot format)
+    // ==========================================
+    if (ownerRes.status === 'fulfilled' && ownerRes.value.ok) {
+      try {
+        const text = await ownerRes.value.text();
+        const data = JSON.parse(text);
+        
+        if (data && data.vehicle_data && data.vehicle_data.owner) {
+          finalOwner = data.vehicle_data.owner;
+        } else {
+          // Fallback just in case format changes slightly
+          finalOwner = data.owner || data.Owner || (data.data && data.data.owner) || "N/A";
+        }
+      } catch (e) {
+        console.error("Owner API parsing failed");
+      }
     }
 
-    // Final clean response frontend ko bhejo
+    // Final clean response UI ko bhej rahe hain
     return res.status(200).json({
       owner: finalOwner,
       mobile: finalMobile
