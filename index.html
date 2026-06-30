@@ -19,20 +19,21 @@
     
     --success: #10b981;
     --error: #ef4444;
+    --warning: #f59e0b;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   html, body {
-    height: 100%;
+    min-height: 100vh;
     background-color: var(--bg-dark);
     font-family: 'Outfit', sans-serif;
     color: var(--text-main);
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     padding: 20px;
-    overflow: hidden;
     position: relative;
   }
 
@@ -109,6 +110,20 @@
   }
 
   @keyframes pulse-ring { 0% { transform: scale(0.5); opacity: 0; } 50% { opacity: 0.5; } 100% { transform: scale(1.5); opacity: 0; } }
+
+  /* Educational Purpose Banner */
+  .edu-banner {
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px dashed rgba(245, 158, 11, 0.3);
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .edu-banner svg { color: var(--warning); flex-shrink: 0; }
+  .edu-banner p { font-size: 12px; color: #fcd34d; line-height: 1.4; font-weight: 500; }
 
   /* Form Area */
   .form-body { padding: 28px 32px 32px; }
@@ -229,6 +244,24 @@
   }
   .help-link:hover { color: var(--primary); border-color: var(--primary); }
 
+  /* Professional Footer */
+  .footer {
+    margin-top: 24px;
+    font-size: 13px;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-weight: 500;
+    z-index: 10;
+    text-shadow: 0 0 10px rgba(14, 165, 233, 0.2);
+  }
+  .footer span {
+    background: linear-gradient(135deg, #0ea5e9, #8b5cf6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 700;
+  }
+
 </style>
 </head>
 <body>
@@ -253,6 +286,12 @@
     </div>
 
     <div class="form-body">
+      
+      <div class="edu-banner">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+        <p>ATTENTION: This terminal is strictly for security testing and educational purposes only.</p>
+      </div>
+
       <form id="lookupForm">
         <div class="form-group">
           <label>Registration Number</label>
@@ -313,6 +352,8 @@
     </div>
   </div>
 
+  <div class="footer">Created by <span>Satyam Gupta</span></div>
+
 <script>
   const API_BASE = "/api/getdata?reg=";
   const REQUIRED_KEY = "key01"; 
@@ -339,6 +380,7 @@
   // Toast Notification Function
   function showToast(message, type = 'error') {
     const toast = document.createElement('div');
+    toast.createElement = `toast ${type}`;
     toast.className = `toast ${type}`;
     toast.innerHTML = `${icons[type]} <span class="toast-message">${message}</span>`;
     
@@ -354,9 +396,16 @@
     }, 3500);
   }
 
-  // Auto-Formatting Input (Only Uppercase and Alphanumeric - No Spaces)
+  // Auto-Formatting Input (Only Uppercase and Alphanumeric) with Cursor Fix
   input.addEventListener('input', (e) => {
-    input.value = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    let cursorPosition = e.target.selectionStart;
+    let originalLength = e.target.value.length;
+    
+    e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    
+    let newLength = e.target.value.length;
+    cursorPosition = cursorPosition - (originalLength - newLength);
+    e.target.setSelectionRange(cursorPosition, cursorPosition);
   });
 
   // Hacker Typing Effect
@@ -375,7 +424,6 @@
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
-    // Clean spaces for API call just in case
     const reg = input.value.replace(/\s/g, '');
     const authKey = keyInput.value.trim();
     
@@ -417,7 +465,7 @@
         const mobileNum = data.mobile || "DATA NOT FOUND";
 
         skeletonBox.classList.remove('show');
-        queriedReg.textContent = input.value; // Show formatted input
+        queriedReg.textContent = input.value; 
         resultBox.classList.add('show');
         
         typeEffect(nameOut, ownerName);
@@ -432,7 +480,7 @@
         btn.disabled = false;
         btn.textContent = 'Initialize Trace';
       }
-    }, 800); // UI delay for hacker feel
+    }, 800); 
   });
 
   // Modern Copy Function
