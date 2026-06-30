@@ -1,5 +1,5 @@
 // api/getdata.js
-// Bulletproof Serverless Proxy
+// Updated Backend Code exactly matching your API JSON structure
 
 export default async function handler(req, res) {
   // CORS Headers
@@ -24,60 +24,44 @@ export default async function handler(req, res) {
   // 1. Strict Cleaning: Sirf Letters aur Numbers allow karenge
   const cleanReg = reg.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-  const MOBILE_API_URL = `https://carter-handheld-textbook-fairy.trycloudflare.com/vnum?reg=${cleanReg}`;
-  const OWNER_API_URL = `https://vehicleinfo.noobgamingv40.workers.dev/fetch?vehicle=${cleanReg}`;
+  // Aapki Main API jisme Owner aur Mobile dono hain
+  const API_URL = `https://vehicleinfo.noobgamingv40.workers.dev/fetch?vehicle=${cleanReg}`;
 
-  // 2. Anti-Bot Headers: Cloudflare ko bypass karne ke liye fake browser footprint
+  // 2. Anti-Bot Headers: Cloudflare ko bypass karne ke liye
   const fetchOptions = {
     method: 'GET',
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept': 'application/json, text/plain, */*',
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Referer': 'https://google.com/'
+      'Accept': 'application/json, text/plain, */*'
     }
   };
 
   try {
-    const [mobileRes, ownerRes] = await Promise.allSettled([
-      fetch(MOBILE_API_URL, fetchOptions),
-      fetch(OWNER_API_URL, fetchOptions)
-    ]);
+    const response = await fetch(API_URL, fetchOptions);
 
-    let finalMobile = "N/A";
+    if (!response.ok) {
+      throw new Error(`API returned ${response.status}`);
+    }
+
+    const text = await response.text();
+    const data = JSON.parse(text);
+
     let finalOwner = "N/A";
+    let finalMobile = "N/A";
 
-    // 3. Safe Parsing for Mobile API
-    if (mobileRes.status === 'fulfilled' && mobileRes.value.ok) {
-      try {
-        const text = await mobileRes.value.text();
-        const data = JSON.parse(text);
-        
-        finalMobile = data.mobile_no || data.mobile || data.number || data.phone || 
-                     (data.result && (data.result.mobile_no || data.result.mobile || data.result.phone)) || 
-                     "N/A";
-      } catch (e) {
-        console.error("Mobile API JSON parse failed");
-      }
+    // ✅ SCREENSHOT KE HISAAB SE EXACT PARSING
+    
+    // 1. Owner Name Extract (vehicle_data ke andar hai)
+    if (data && data.vehicle_data && data.vehicle_data.owner) {
+      finalOwner = data.vehicle_data.owner;
     }
 
-    // 4. Safe Parsing for Owner API (Handles all common nested structures)
-    if (ownerRes.status === 'fulfilled' && ownerRes.value.ok) {
-      try {
-        const text = await ownerRes.value.text();
-        const data = JSON.parse(text);
-        
-        // Deep search check for Owner Name
-        finalOwner = data.owner || data.Owner || data.OWNER || 
-                     (data.data && (data.data.owner || data.data.Owner)) || 
-                     (data.result && (data.result.owner || data.result.Owner)) || 
-                     "N/A";
-      } catch (e) {
-        console.error("Owner API JSON parse failed");
-      }
+    // 2. Mobile Number Extract (Seedha bahar hai)
+    if (data && data.mobile_number) {
+      finalMobile = data.mobile_number;
     }
 
-    // Final clean response to frontend
+    // Final clean response frontend ko bhejo
     return res.status(200).json({
       owner: finalOwner,
       mobile: finalMobile
