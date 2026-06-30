@@ -1,9 +1,8 @@
 // api/getdata.js
-// Vercel Serverless Function — acts as a secure server-side proxy.
-// Frontend sirf is file ko call karega, original APIs hidden rahengi.
+// Bulletproof Serverless Proxy
 
 export default async function handler(req, res) {
-  // Allow CORS
+  // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -22,49 +21,63 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing required query param: reg' });
   }
 
-  // Sanity check on format
-  const cleanReg = reg.trim().toUpperCase();
-  if (!/^[A-Z0-9]{4,12}$/.test(cleanReg)) {
-    return res.status(400).json({ error: 'Invalid registration number format' });
-  }
+  // 1. Strict Cleaning: Sirf Letters aur Numbers allow karenge
+  const cleanReg = reg.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-  // Dono APIs ke URLs set karo
-  const MOBILE_API_URL = `https://carter-handheld-textbook-fairy.trycloudflare.com/vnum?reg=${encodeURIComponent(cleanReg)}`;
-  const OWNER_API_URL = `https://vehicleinfo.noobgamingv40.workers.dev/fetch?vehicle=${encodeURIComponent(cleanReg)}`;
+  const MOBILE_API_URL = `https://carter-handheld-textbook-fairy.trycloudflare.com/vnum?reg=${cleanReg}`;
+  const OWNER_API_URL = `https://vehicleinfo.noobgamingv40.workers.dev/fetch?vehicle=${cleanReg}`;
+
+  // 2. Anti-Bot Headers: Cloudflare ko bypass karne ke liye fake browser footprint
+  const fetchOptions = {
+    method: 'GET',
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'application/json, text/plain, */*',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Referer': 'https://google.com/'
+    }
+  };
 
   try {
-    // Dono APIs ko ek saath (parallel) hit karo taaki speed fast rahe
     const [mobileRes, ownerRes] = await Promise.allSettled([
-      fetch(MOBILE_API_URL),
-      fetch(OWNER_API_URL)
+      fetch(MOBILE_API_URL, fetchOptions),
+      fetch(OWNER_API_URL, fetchOptions)
     ]);
 
     let finalMobile = "N/A";
     let finalOwner = "N/A";
 
-    // 1. Mobile Data Extract karna (Puraani API se)
+    // 3. Safe Parsing for Mobile API
     if (mobileRes.status === 'fulfilled' && mobileRes.value.ok) {
       try {
-        const mobileData = await mobileRes.value.json();
-        // API ke structure ke hisaab se jo field mile use pick karein
-        finalMobile = mobileData.mobile_no || mobileData.mobile || mobileData.number || mobileData.phone || mobileData.result || "N/A";
+        const text = await mobileRes.value.text();
+        const data = JSON.parse(text);
+        
+        finalMobile = data.mobile_no || data.mobile || data.number || data.phone || 
+                     (data.result && (data.result.mobile_no || data.result.mobile || data.result.phone)) || 
+                     "N/A";
       } catch (e) {
-        console.error("Error parsing Mobile API JSON");
+        console.error("Mobile API JSON parse failed");
       }
     }
 
-    // 2. Owner Name Extract karna (Nayi API se)
+    // 4. Safe Parsing for Owner API (Handles all common nested structures)
     if (ownerRes.status === 'fulfilled' && ownerRes.value.ok) {
       try {
-        const ownerData = await ownerRes.value.json();
-        // Nayi API se strictly owner name pick karein
-        finalOwner = ownerData.owner || ownerData.Owner || "N/A";
+        const text = await ownerRes.value.text();
+        const data = JSON.parse(text);
+        
+        // Deep search check for Owner Name
+        finalOwner = data.owner || data.Owner || data.OWNER || 
+                     (data.data && (data.data.owner || data.data.Owner)) || 
+                     (data.result && (data.result.owner || data.result.Owner)) || 
+                     "N/A";
       } catch (e) {
-        console.error("Error parsing Owner API JSON");
+        console.error("Owner API JSON parse failed");
       }
     }
 
-    // Frontend ko ek saaf aur combined response bhejo
+    // Final clean response to frontend
     return res.status(200).json({
       owner: finalOwner,
       mobile: finalMobile
